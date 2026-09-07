@@ -1,0 +1,15 @@
+{
+  "name": "parabolic-scanner-binance",
+  "version": "1.0.0",
+  "description": "Standalone parabolic dump scanner for Binance USDM perps, forked from the Gate.io original. Rules measured on Binance's own OI/taker/price data - no liquidation feed exists there. Ranks and records; places no trades. API + dashboard on port 8805.",
+  "main": "scanner.cjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.8"
+  }
+}

@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e1219">
+<title>Dump Watch — Binance</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --g0:#f6f8fb; --g1:#ffffff; --g2:#eef1f7; --line:#dde3ed; --line2:#c9d2e0;
+  --ink:#151a23; --ink2:#4a5568; --ink3:#78849b;
+  --crit:#8e0d18; --imm:#d1373c; --dan:#c25c14; --wrn:#9a7715; --qui:#7b8798;
+  --acc:#4d5fd4; --up:#127a53; --dn:#c0343a;
+  --shadow:0 1px 2px rgba(20,28,45,.06),0 4px 14px rgba(20,28,45,.05);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --g0:#0e1219; --g1:#161b25; --g2:#1d2431; --line:#28313f; --line2:#394456;
+    --ink:#e8ecf3; --ink2:#a4b0c2; --ink3:#75839a;
+    --crit:#ff2d55; --imm:#ff6168; --dan:#ff9147; --wrn:#e8bb45; --qui:#8593a8;
+    --acc:#8b9bff; --up:#3ecf8e; --dn:#ff6168;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --g0:#0e1219; --g1:#161b25; --g2:#1d2431; --line:#28313f; --line2:#394456;
+  --ink:#e8ecf3; --ink2:#a4b0c2; --ink3:#75839a;
+  --crit:#ff2d55; --imm:#ff6168; --dan:#ff9147; --wrn:#e8bb45; --qui:#8593a8;
+  --acc:#8b9bff; --up:#3ecf8e; --dn:#ff6168;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--g0);color:var(--ink);
+  font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 18px calc(60px + var(--safe-b))}
+@media(max-width:640px){.wrap{padding:18px 12px calc(50px + var(--safe-b))}}
+h1,h2{font-family:'Archivo',sans-serif;margin:0;text-wrap:balance}
+.num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:3px}
+
+/* masthead */
+.mast{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;
+  padding-bottom:14px;border-bottom:2px solid var(--ink)}
+h1{font-size:26px;font-weight:800;letter-spacing:-.022em;line-height:1.05;display:flex;align-items:center;gap:9px}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--up);flex:0 0 auto}
+.pulse.off{background:var(--imm)}
+@media (prefers-reduced-motion:no-preference){
+  .pulse{animation:bp 2.4s ease-in-out infinite}
+  @keyframes bp{0%,100%{opacity:1}50%{opacity:.35}}
+}
+.sub{color:var(--ink2);font-size:12.5px;margin-top:4px}
+.stampbox{text-align:right;font-size:11px;color:var(--ink3);line-height:1.7}
+.stampbox .t{font-size:13px;color:var(--ink);font-weight:600;
+  font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+
+/* severity ramp */
+.ramp{margin:20px 0 6px}
+.rampbar{display:flex;height:32px;border-radius:5px;overflow:hidden;border:1px solid var(--line)}
+.rampbar>button{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+  color:#fff;min-width:0;transition:opacity .15s;font-family:'IBM Plex Mono',monospace}
+.rampbar>button:hover{opacity:.82}
+.rampbar>button[aria-pressed="false"]{opacity:.3}
+.rampkey{display:flex;gap:15px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--ink2)}
+.rampkey span{display:flex;align-items:center;gap:6px}
+.sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+
+/* controls */
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:18px 0 10px}
+.ctlrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.ctllab{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);
+  font-weight:700;flex:0 0 62px}
+/* the sort list is wider than a phone; let it scroll instead of clipping */
+.segscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;flex:1}
+.segscroll::-webkit-scrollbar{display:none}
+.seg.wide{flex:1}
+.seg.wide button{flex:1;text-align:center;font-size:13px;padding:9px 12px}
+.ctl input{flex:1;min-width:130px;background:var(--g1);border:1px solid var(--line);color:var(--ink);
+  border-radius:5px;padding:8px 11px;font-size:13.5px}
+.ctl input::placeholder{color:var(--ink3)}
+.seg{display:flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--g1)}
+.seg button{padding:8px 12px;font-size:11.5px;font-weight:600;color:var(--ink3);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--g2);color:var(--ink)}
+.seg button+button{border-left:1px solid var(--line)}
+
+/* group heads */
+.ghead{display:flex;align-items:baseline;gap:10px;margin:28px 0 11px;padding-bottom:6px;
+  border-bottom:1px solid var(--line)}
+.ghead h2{font-size:12.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}
+.ghead .c{font-size:12px;color:var(--ink3)}
+.ghead .d{margin-left:auto;font-size:11px;color:var(--ink3);text-align:right}
+
+/* card */
+.card{background:var(--g1);border:1px solid var(--line);border-left-width:4px;border-radius:6px;
+  margin-bottom:10px;box-shadow:var(--shadow);overflow:hidden}
+.card.PRIME{border-left-color:var(--crit);border-left-width:5px}
+.card.IMMINENT{border-left-color:var(--imm)} .card.DANGER{border-left-color:var(--dan)}
+.card.WARNING{border-left-color:var(--wrn)} .card.QUIET{border-left-color:var(--qui)}
+.chead{display:flex;justify-content:space-between;align-items:center;gap:13px;padding:14px 16px;
+  cursor:pointer;width:100%;text-align:left}
+.tickwrap{min-width:0;flex:1;overflow:hidden}
+.tick{font-family:'Archivo',sans-serif;font-size:19px;font-weight:700;letter-spacing:-.01em;
+  line-height:1.15;overflow-wrap:anywhere}
+/* The chips were inline in .tick, which is a no-wrap flex row - with a control
+   chip, an age chip and a "was PRIME" badge all set nowrap, the line overflowed
+   .tickwrap and printed across the sparkline. Their own wrapping row fixes it
+   for any number of chips. */
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.px{font-size:11.5px;color:var(--ink3);margin-top:3px;font-family:'IBM Plex Mono',monospace}
+.spark{flex:0 1 auto;min-width:0;opacity:.9}
+@media(max-width:420px){.spark{display:none}}
+.scorewrap{text-align:right;flex:0 0 auto;min-width:44px}
+.score{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;line-height:1;
+  font-variant-numeric:tabular-nums}
+.scorelab{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3);margin-top:2px}
+.chev{color:var(--ink3);font-size:11px;flex:0 0 auto;transition:transform .18s}
+.card.open .chev{transform:rotate(180deg)}
+
+/* quick strip always visible */
+.quick{display:flex;gap:14px;flex-wrap:wrap;padding:0 16px 13px;font-size:11.5px;color:var(--ink3);
+  font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.quick b{font-weight:600}
+
+/* body */
+.cbody{display:none;padding:0 16px 16px;border-top:1px solid var(--line)}
+.card.open .cbody{display:block}
+.mets{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:11px 13px;margin-top:14px}
+.met .k{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.met .v{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;
+  font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
+.up{color:var(--up)} .dn{color:var(--dn)} .mut{color:var(--ink3)} .am{color:var(--wrn)}
+
+/* evidence */
+.blk{margin-top:15px;padding-top:13px;border-top:1px solid var(--line)}
+.blab{font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3);margin-bottom:9px}
+.evrow{display:grid;grid-template-columns:46px 1fr;gap:10px;align-items:center;margin-bottom:6px;font-size:12.5px}
+.lift{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;text-align:right;
+  font-variant-numeric:tabular-nums}
+.evtxt{color:var(--ink2);display:flex;align-items:center;gap:8px;min-width:0}
+.liftbar{height:3px;border-radius:2px;flex:0 0 auto;min-width:2px}
+.evrow.pos .lift{color:var(--imm)}
+.evrow.neg .lift{color:var(--up)} .evrow.neg .evtxt{color:var(--ink3)}
+.note{margin-top:8px;padding:8px 10px;background:var(--g2);border-radius:4px;font-size:11.5px;
+  color:var(--ink2);line-height:1.5}
+
+/* gaps */
+.gap{display:grid;grid-template-columns:72px 1fr 96px;gap:10px;align-items:center;
+  font-size:11.5px;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;
+  font-variant-numeric:tabular-nums}
+.gap .gl{color:var(--ink3);font-family:'IBM Plex Sans',sans-serif;font-size:11px}
+.track{height:5px;background:var(--g2);border-radius:3px;overflow:hidden}
+.track>span{display:block;height:100%;border-radius:3px;background:var(--acc)}
+.track>span.met{background:var(--imm)}
+.gap .gv{text-align:right;color:var(--ink2);font-size:11px}
+.gap .gv.met{color:var(--imm);font-weight:600}
+
+/* signal age */
+.agechip{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;
+  color:var(--ink3);background:var(--g2);border-radius:4px;padding:2px 7px;
+  letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap}
+.agechip b{color:var(--ink2);font-weight:600}
+.agechip .hit{color:var(--imm);font-weight:600}
+.agechip .miss{color:var(--up);font-weight:600}
+
+/* timeline */
+.tl{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:baseline;margin-bottom:7px;
+  font-size:12px}
+.tlk{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink3);
+  font-variant-numeric:tabular-nums;text-align:right}
+.tlv{color:var(--ink2);line-height:1.5}
+.tpill{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.05em;padding:1px 5px;
+  border-radius:3px;vertical-align:1px;color:#fff}
+.tpill.PRIME{background:var(--crit)}
+.tpill.IMMINENT{background:var(--imm)} .tpill.DANGER{background:var(--dan)}
+.tpill.WARNING{background:var(--wrn)} .tpill.QUIET{background:var(--qui)}
+
+/* refresh countdown */
+.next{display:inline-flex;align-items:center;gap:5px}
+.ring{width:9px;height:9px;border-radius:50%;flex:0 0 auto;
+  background:conic-gradient(var(--acc) var(--p,0%), var(--line) 0)}
+
+/* trade levels */
+.lv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-top:4px}
+.lvbox{background:var(--g2);border-radius:5px;padding:8px 10px}
+.lvk{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
+.lvv{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin-top:2px;
+  font-variant-numeric:tabular-nums}
+.lvv.t{color:var(--up)} .lvv.s{color:var(--imm)}
+.lvsub{font-size:9.5px;color:var(--ink3);margin-top:1px;font-family:'IBM Plex Mono',monospace}
+.prog{height:6px;background:var(--g2);border-radius:3px;overflow:hidden;margin-top:10px;position:relative}
+.prog>span{display:block;height:100%;border-radius:3px;background:var(--up)}
+.progl{display:flex;justify-content:space-between;font-size:10px;color:var(--ink3);margin-top:4px;
+  font-family:'IBM Plex Mono',monospace}
+.caveat{font-size:10.5px;color:var(--ink3);line-height:1.5;margin-top:9px;
+  border-left:2px solid var(--line2);padding-left:9px}
+.caveat b{color:var(--wrn);font-weight:600}
+.rec{font-size:11.5px;color:var(--ink2);margin-top:10px;line-height:1.6}
+.rec b{color:var(--ink);font-weight:600}
+.rec.mut{color:var(--ink3)}
+.trackbar{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink2);
+  background:var(--g1);border:1px solid var(--line);border-radius:6px;padding:10px 13px;margin-bottom:11px}
+.trackbar b{color:var(--ink);font-weight:600;font-family:'IBM Plex Mono',monospace}
+.trackbar .lab{color:var(--ink3)}
+.tfnote{font-size:11px;color:var(--ink3);margin:9px 0 2px;line-height:1.5}
+.tfnote b{color:var(--ink2);font-weight:600}
+/* past signals: deliberately quieter than a live tier - informative, never an invitation */
+.past{background:var(--g1);border:1px solid var(--line);border-left:3px solid var(--line2);
+  border-radius:6px;padding:11px 14px;margin-bottom:8px;opacity:.92}
+.pasttop{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.pastsym{font-family:'Archivo',sans-serif;font-weight:700;font-size:15px}
+.pastwas{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin-top:2px}
+.pastwas .wt{font-weight:700}
+.pastwas .wt.PRIME{color:var(--crit)} .pastwas .wt.IMMINENT{color:var(--imm)}
+.pastnum{text-align:right;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.pastnum .big{font-size:17px;font-weight:600}
+.pastnum .sub{font-size:10px;color:var(--ink3);margin-top:1px}
+.pastbar{height:5px;background:var(--g2);border-radius:3px;overflow:hidden;margin-top:9px}
+.pastbar>span{display:block;height:100%;border-radius:3px;background:var(--up)}
+.pastfoot{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink3);margin-top:5px;
+  font-family:'IBM Plex Mono',monospace}
+/* who is in control - descriptive, so it is a neutral chip rather than a
+   red/green verdict. Only the measured-below-base case gets a caution colour. */
+.ctrl{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
+  letter-spacing:.05em;padding:3px 8px;border-radius:5px;
+  font-family:'IBM Plex Sans',sans-serif;background:var(--g2);color:var(--ink2);white-space:nowrap}
+.ctrl .dotc{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+.ctrl.LONGS_BUILDING{background:rgba(77,95,212,.14);color:var(--acc)}
+.ctrl.LONGS_BUILDING .dotc{background:var(--acc)}
+.ctrl.SHORTS_BUILDING{background:rgba(120,132,155,.16);color:var(--ink2)}
+.ctrl.SHORTS_BUILDING .dotc{background:var(--ink2)}
+.ctrl.LONGS_CAPITULATING{background:rgba(209,55,60,.13);color:var(--imm)}
+.ctrl.LONGS_CAPITULATING .dotc{background:var(--imm)}
+.ctrl.SHORT_SQUEEZE{background:rgba(154,119,21,.16);color:var(--wrn)}
+.ctrl.SHORT_SQUEEZE .dotc{background:var(--wrn)}
+.ctrl.QUIET{opacity:.7}
+.ctrlwhy{font-size:11px;color:var(--ink3);line-height:1.55;margin-top:8px}
+.ctrlwhy b{color:var(--ink2);font-weight:600}
+.ctrlwhy .cau{color:var(--wrn)}
+.badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 6px;
+  border-radius:4px;background:var(--g2);color:var(--ink3);
+  font-family:'IBM Plex Sans',sans-serif}
+.badge .bt{font-weight:700}
+.badge .bt.PRIME{color:var(--crit)} .badge .bt.IMMINENT{color:var(--imm)}
+/* resolved log */
+.logrow{display:grid;grid-template-columns:1fr 74px 68px 62px 46px;gap:8px;align-items:center;
+  font-size:11.5px;padding:7px 0;border-bottom:1px solid var(--line);
+  font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.logrow:last-child{border-bottom:none}
+.logrow .nm{font-family:'Archivo',sans-serif;font-weight:600;font-size:13px}
+.st{font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  padding:2px 6px;border-radius:4px;text-align:center;font-family:'IBM Plex Sans',sans-serif}
+.st.target{background:rgba(18,122,83,.16);color:var(--up)}
+.st.stop{background:rgba(209,55,60,.16);color:var(--imm)}
+.st.expired{background:var(--g2);color:var(--ink3)}
+.empty{font-size:12.5px;color:var(--ink3);padding:16px 0;text-align:center}
+.banner{background:var(--g1);border:1px solid var(--wrn);border-left:4px solid var(--wrn);
+  color:var(--ink2);font-size:12px;padding:10px 13px;border-radius:5px;margin-bottom:11px}
+.method{margin-top:32px;padding:18px;background:var(--g1);border:1px solid var(--line);border-radius:6px;
+  font-size:12.5px;color:var(--ink2);line-height:1.65}
+.method h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:11px;color:var(--ink)}
+.method b{color:var(--ink);font-weight:600}
+.method p{margin:0 0 9px} .method p:last-child{margin:0}
+.foot{margin-top:20px;font-size:11px;color:var(--ink3);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mast">
+    <div>
+      <h1><span class="pulse" id="pulse"></span>Dump Watch</h1>
+      <div class="sub">Standalone · data direct from Gate.io · <span id="uniN">–</span> crypto perps</div>
+    </div>
+    <div class="stampbox">
+      <div class="t" id="stamp">—</div>
+      <div id="meta">connecting…</div>
+    </div>
+  </div>
+
+  <div class="ramp">
+    <div class="rampbar" id="rampbar"></div>
+    <div class="rampkey" id="rampkey"></div>
+  </div>
+
+  <div class="ctl">
+    <input id="q" type="search" placeholder="Filter coin…" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="ctlrow">
+    <span class="ctllab">Timeframe</span>
+    <div class="seg wide" id="tfSeg">
+      <button data-tf="m1" aria-pressed="false">1m</button>
+      <button data-tf="m5" aria-pressed="false">5m</button>
+      <button data-tf="m15" aria-pressed="false">15m</button>
+      <button data-tf="h1" aria-pressed="true">1h</button>
+      <button data-tf="h4" aria-pressed="false">4h</button>
+    </div>
+  </div>
+  <div class="ctlrow">
+    <span class="ctllab">Sort</span>
+    <div class="segscroll"><div class="seg" id="sortSeg">
+      <button data-s="tier" aria-pressed="true">Severity</button>
+      <button data-s="new" aria-pressed="false">Newest</button>
+      <button data-s="oi" aria-pressed="false">OI 24h</button>
+      <button data-s="move" aria-pressed="false">24h move</button>
+      <button data-s="liq" aria-pressed="false">Liq</button>
+    </div></div>
+  </div>
+
+  <div id="track"></div>
+  <div class="tfnote" id="tfnote"></div>
+  <div id="banner"></div>
+  <details class="sec" id="pastSec" style="display:none">
+    <summary><span>Recently PRIME / IMMINENT</span><span class="cnt" id="pastCnt"></span></summary>
+    <div class="body" id="pastList"></div>
+  </details>
+
+  <div id="list"><div class="empty">loading…</div></div>
+
+  <details class="sec" id="logSec" style="display:none">
+    <summary><span>Resolved signals</span><span class="cnt" id="logCnt"></span></summary>
+    <div class="body" id="logList"></div>
+  </details>
+
+  <div class="method">
+    <h2>How a tier is decided</h2>
+    <p>One measurement underlies every rule: <b>30 days of Gate 1-hour bars, 36,029 observations
+    across 39 crypto perps</b>. Outcome measured: did price fall 10% within 12 hours. Base rate
+    <b>6.0%</b>. Symbols split odd/even into train and test, <b>each half scored against its own base
+    rate</b> — the halves differed 1.6×, so a pooled denominator would make every lift wrong.</p>
+    <p>Tiers come from combinations measured <b>jointly</b>, never from multiplying separate lifts —
+    OI change and 24h return are correlated, and treating them as independent would manufacture
+    confidence that was never measured.</p>
+    <p><b>Open interest is the signal, in either direction.</b> Still building or violently unwinding
+    both precede dumps; quiet OI sits at 0.5× — half base.</p>
+    <p><b>Taker ratio is anti-predictive at the extremes</b>, confirmed on Gate and Binance alike.
+    Only the neutral 0.95–1.05 band is elevated, so it is deliberately not scored as bearish.</p>
+    <p><b>PRIME</b> is ported from the older tamad-scanner, whose top band measured
+    sharper (76% hit) than anything derived here, at the cost of firing on only ~0.5%
+    of hours. Three of its components measured backwards on its own data — its taker
+    term, its near-the-high bonus, and scoring open interest only when falling — and
+    are corrected here. Fixed, it went 71.1% → 76.1% while firing more often.</p>
+    <p>The score ranks coins <b>within</b> a tier and is not a probability: strongest rule that fired,
+    plus a small bonus per corroborating rule.</p>
+  </div>
+  <div class="foot">Scanner only — it ranks and records, it never trades.</div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const TIERS = ['PRIME','IMMINENT','DANGER','WARNING','QUIET'];
+const VAR = {PRIME:'--crit',IMMINENT:'--imm',DANGER:'--dan',WARNING:'--wrn',QUIET:'--qui'};
+const DESC = {
+  PRIME:'highest measured precision \u00b7 9.7\u00d7 \u00b7 fires ~0.5% of hours',
+  IMMINENT:'strongest measured combinations · 7.0–8.4×',
+  DANGER:'single strong signals · 5.5–6.4×',
+  WARNING:'early or weaker signals · 1.4–4.0×',
+  QUIET:'no measured dump pattern present'
+};
+const MAXLIFT = 9.67;
+
+let DATA = null, sortBy = 'tier', query = '', tf = 'h1';
+const TFLABEL = {m1:'1m', m5:'5m', m15:'15m', h1:'1h', h4:'4h'};
+// chgN counts bars OF THE SELECTED TIMEFRAME, so the same field means a different
+// span on each view. Spelling it out beats a bare "chg24" the reader has to decode.
+// 48 bars of each timeframe covers a different span of real time; the card says
+// which, so a flat 15m line is not mistaken for a flat 3-day one.
+const TFCOVER = {m1:'48m', m5:'4h', m15:'12h', h1:'2d', h4:'8d'};
+const TFSPAN = {
+  m1: {chg1:'1m',  chg4:'4m', chg6:'6m',  chg24:'24m'},
+  m5: {chg1:'5m',  chg4:'20m',chg6:'30m', chg24:'2h'},
+  m15:{chg1:'15m', chg4:'1h', chg6:'90m', chg24:'6h'},
+  h1: {chg1:'1h',  chg4:'4h', chg6:'6h',  chg24:'24h'},
+  h4: {chg1:'4h',  chg4:'16h',chg6:'24h', chg24:'4d'}
+};
+const hidden = new Set();
+const open = new Set();
+
+const f1 = (v,s) => v == null ? '—' : (s && v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+const cls = v => v == null ? 'mut' : v > 0 ? 'up' : v < 0 ? 'dn' : 'mut';
+const usd = v => v == null ? '—' : v >= 1e9 ? (v/1e9).toFixed(1)+'B' : v >= 1e6 ? (v/1e6).toFixed(0)+'M' : (v/1e3).toFixed(0)+'K';
+// The scanner sends 999 for "only longs liquidated" and 0 for its mirror.
+// Printing those as ratios reads like real numbers, so name them.
+const skew = v => v == null ? '—' : v >= 100 ? 'longs' : v === 0 ? 'shorts' : v.toFixed(2);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// Compact durations: a signal age is scanned, not read, so "2h14m" beats
+// "2 hours 14 minutes" and never wraps the row.
+function dur(sec) {
+  if (sec == null) return '—';
+  if (sec < 60) return sec + 's';
+  const m = Math.floor(sec / 60);
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60), r = m % 60;
+  if (h < 24) return r ? h + 'h' + r + 'm' : h + 'h';
+  return Math.floor(h / 24) + 'd' + (h % 24) + 'h';
+}
+const clock = ts => new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+// Best excursion for a SHORT. The stored value is positive when price FELL, so
+// rendering it needs the sign flipped - printing '-' in front of an already
+// negative number produced "--3.4%", which reads as nothing at all.
+// Positive stored -> price fell (good). Negative stored -> never got below entry.
+// Taker is shown because it is asked for, but it is never coloured as bearish:
+// extremes on BOTH ends measured BELOW the base rate (0.68-0.82x) on Gate and
+// Binance alike. Amber marks "this is an extreme, and extremes are LESS likely to
+// dump" - the opposite of what a red would imply.
+const takerCls = v => v == null ? 'mut' : (v < 0.85 || v >= 1.2) ? 'am' : '';
+// LONG/SHORT/FLAT next to the raw ratio, so it reads without doing the
+// mental "which side of 1.0" math. Neutral band (0.95-1.05) matches the
+// measured elevated band from the study - shown as FLAT, not a direction.
+const takerLabel = v => v == null ? '' : v > 1.05 ? 'LONG' : v < 0.95 ? 'SHORT' : 'FLAT';
+const takerFmt = v => v == null ? '—' : v.toFixed(2) + ' ' + takerLabel(v);
+// OI's dollar value has no sign of its own (it's a total, always positive) -
+// this pairs it with the recent change's direction so the value and its
+// trend read together instead of needing a second cell to know which way
+// it's moving. chgPct is the reference change (6h, to match the cell that
+// already sits next to this one everywhere it's shown).
+const oiValFmt = (oiUsd, chgPct) => oiUsd == null ? '—' :
+  usd(oiUsd) + (chgPct == null ? '' : chgPct > 0 ? ' ▲' : chgPct < 0 ? ' ▼' : ' ―');
+// +30% in 24h is the exact PRIME threshold in score.cjs ("open interest
+// +30%+ in 24h", 10.38x/6.30x) - flagged here so it reads as a real
+// threshold crossing, not just a bigger green number than its neighbors.
+const oi24Fmt = v => f1(v, true) + (v != null && v > 30 ? ' 🔥' : '');
+const bestFmt = v => v == null ? '\u2014'
+  : v > 0 ? '-' + v.toFixed(1) + '%'
+  : '+' + Math.abs(v).toFixed(1) + '% (never below entry)';
+
+function sparkline(vals, color, w, h) {
+  if (!vals || vals.length < 3) return '';
+  const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  const span = hi - lo || 1;
+  const step = w / (vals.length - 1);
+  const pts = vals.map((v,i) => (i*step).toFixed(1)+','+(h - ((v-lo)/span)*h).toFixed(1));
+  const last = vals[vals.length-1], first = vals[0];
+  const c = color || (last >= first ? 'var(--up)' : 'var(--dn)');
+  return '<svg class="spark" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" aria-hidden="true">'+
+    '<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+c+'" stroke-width="1.5" '+
+    'stroke-linejoin="round" stroke-linecap="round"/>'+
+    '<circle cx="'+(w).toFixed(1)+'" cy="'+(h-((last-lo)/span)*h).toFixed(1)+'" r="2" fill="'+c+'"/></svg>';
+}
+
+function evidence(c) {
+  const rows = [];
+  const parse = r => {
+    const m = r.match(/\(([\d.]+)x\/([\d.]+)x\)$/);
+    return { lift: m ? parseFloat(m[2]) : null, txt: r.replace(/\s*\([\d.]+x\/[\d.]+x\)$/, '') };
+  };
+  (c.reasons||[]).forEach(r => { const p = parse(r);
+    rows.push('<div class="evrow pos"><div class="lift">'+(p.lift?p.lift.toFixed(2)+'×':'')+'</div>'+
+      '<div class="evtxt"><span class="liftbar" style="width:'+(p.lift?Math.round(p.lift/MAXLIFT*54):0)+
+      'px;background:var(--imm)"></span>'+esc(p.txt)+'</div></div>'); });
+  (c.dampeners||[]).forEach(r => { const p = parse(r);
+    rows.push('<div class="evrow neg"><div class="lift">'+(p.lift?p.lift.toFixed(2)+'×':'')+'</div>'+
+      '<div class="evtxt"><span class="liftbar" style="width:'+Math.max(2,p.lift?Math.round(p.lift/MAXLIFT*54):2)+
+      'px;background:var(--up)"></span>'+esc(p.txt)+'</div></div>'); });
+  if (!rows.length) return '';
+  const notes = (c.notes||[]).map(n => '<div class="note">'+esc(n)+'</div>').join('');
+  return '<div class="blk"><div class="blab">Evidence · measured lift vs base rate</div>'+
+    rows.join('')+notes+'</div>';
+}
+
+function gaps(c) {
+  if (!c.gaps || !c.gaps.length) return '';
+  const rows = c.gaps.map(g =>
+    '<div class="gap"><div class="gl">'+esc(g.label)+'</div>'+
+    '<div class="track"><span class="'+(g.met?'met':'')+'" style="width:'+Math.round(g.pct*100)+'%"></span></div>'+
+    '<div class="gv '+(g.met?'met':'')+'">'+(g.met ? g.cur+g.unit+' ✓' : g.cur+g.unit+' / '+g.thr+g.unit)+
+    '</div></div>').join('');
+  return '<div class="blk"><div class="blab">Distance to each threshold</div>'+rows+'</div>';
+}
+
+// The two things that separate a fresh signal from a stale one: how long it has
+// been firing, and what price has done since. Shown together so they read as one
+// statement — "IMMINENT 42m · -6.2% since".
+function since(c) {
+  if (c.tier === 'QUIET') return '';
+  const d = c.changeSinceTierPct;
+  // A dump signal is working when price FALLS, so negative is the good outcome
+  // here and gets the hit colour. This is the opposite of a normal P&L colouring
+  // and is labelled in the expanded view so it cannot be misread.
+  const k = d == null ? 'mut' : d <= -1 ? 'hit' : d >= 1 ? 'miss' : 'mut';
+  return '<span class="agechip"><b>'+dur(c.tierAgeSec)+'</b>'+
+    (d == null ? '' : ' <span class="'+k+'">'+(d>=0?'+':'')+d.toFixed(1)+'%</span>')+'</span>';
+}
+
+function timeline(c) {
+  const h = (c.history || []).slice().reverse();
+  const rows = [
+    '<div class="tl"><div class="tlk">now</div>'+
+    '<div class="tlv"><span class="tpill '+c.tier+'">'+c.tier+'</span> for '+dur(c.tierAgeSec)+
+    (c.changeSinceTierPct != null ? ' · price '+(c.changeSinceTierPct>=0?'+':'')+
+      c.changeSinceTierPct.toFixed(2)+'% since' : '')+
+    (c.scoreDelta ? ' · score '+(c.scoreDelta>0?'+':'')+c.scoreDelta : '')+'</div></div>'
+  ];
+  h.forEach(e => rows.push(
+    '<div class="tl"><div class="tlk">'+clock(e.t)+'</div>'+
+    '<div class="tlv">'+(e.from ? '<span class="tpill '+e.from+'">'+e.from+'</span> → ' : 'entered ')+
+    '<span class="tpill '+e.to+'">'+e.to+'</span> at '+e.price+'</div></div>'));
+  if (c.peakTier && c.peakTier !== c.tier) rows.push(
+    '<div class="tl"><div class="tlk">peak</div><div class="tlv">reached '+
+    '<span class="tpill '+c.peakTier+'">'+c.peakTier+'</span> in this track</div></div>');
+  rows.push('<div class="tl"><div class="tlk">tracked</div><div class="tlv mut">'+
+    dur(c.trackAgeSec)+' · '+(c.changeSinceTierPct!=null?'negative % = price fell since the signal fired, which is a hit for a dump call':'')+'</div></div>');
+  return '<div class="blk"><div class="blab">Signal timeline</div>'+rows.join('')+'</div>';
+}
+
+// Short levels. Deliberately shows the 10x liquidation price even though the
+// study says 5x - seeing that 10x liquidates at +9.5% is the whole argument.
+function levels(c) {
+  const L = c.levels;
+  if (!L) return '';
+  const state = L.hitTarget ? '<span class="lvv t">target hit</span>'
+    : L.hitStop ? '<span class="lvv s">stop hit</span>' : '';
+  return '<div class="blk"><div class="blab">Candidate short levels ' + state + '</div>' +
+    '<div class="lv">' +
+      '<div class="lvbox"><div class="lvk">entry</div><div class="lvv">' + L.entry + '</div>' +
+        '<div class="lvsub">when tier fired</div></div>' +
+      '<div class="lvbox"><div class="lvk">target</div><div class="lvv t">' + L.target + '</div>' +
+        '<div class="lvsub">-' + L.targetPct + '%</div></div>' +
+      '<div class="lvbox"><div class="lvk">stop</div><div class="lvv s">' + L.stop + '</div>' +
+        '<div class="lvsub">+' + L.stopPct + '%</div></div>' +
+    '</div>' +
+    '<div class="prog"><span style="width:' + L.progressPct + '%"></span></div>' +
+    '<div class="progl"><span>moved ' + (L.movedPct >= 0 ? '+' : '') + L.movedPct + '%</span>' +
+      '<span>' + L.progressPct + '% to target</span></div>' +
+    '<div class="lv" style="margin-top:9px">' +
+      '<div class="lvbox"><div class="lvk">liq @ 5x</div><div class="lvv">' + L.liq5x + '</div>' +
+        '<div class="lvsub">+19.0%</div></div>' +
+      '<div class="lvbox"><div class="lvk">liq @ 10x</div><div class="lvv s">' + L.liq10x + '</div>' +
+        '<div class="lvsub">+9.5% \u2014 57% hit this first</div></div>' +
+      '<div class="lvbox"><div class="lvk">median low</div><div class="lvv">16h</div>' +
+        '<div class="lvsub">after the signal</div></div>' +
+    '</div>' +
+    '<div class="caveat"><b>Not a validated system.</b> These levels are one configuration ' +
+    'out of 60 tested on 30 episodes (5x, -15% target, +12% stop, +$0.53/trade). That is the ' +
+    'shape of an overfit result. At 10x, 57% of PRIME signals liquidate before the dump arrives.</div>' +
+  '</div>';
+}
+
+// The selected timeframe's own numbers, labelled with the real span each covers.
+// Headline change on the selected timeframe, falling back to the 1h ret24 the
+// tiers actually use when that timeframe has no data yet.
+// The chart for the selected timeframe, falling back to the legacy 1h series if
+// a coin predates the per-timeframe sparks.
+function sparkFor(c) {
+  const a = c.sparks && c.sparks[tf];
+  return (a && a.length > 2) ? a : null;
+}
+
+// Read a field from the SELECTED timeframe, falling back to the 1h value the
+// tiers actually use when that view has no data yet.
+function q(c, key) {
+  const m = c.tf && c.tf[tf];
+  return (m && m[key] != null) ? m[key] : c[key];
+}
+
+function qchg(c) {
+  const m = c.tf && c.tf[tf];
+  return m && m.chg24 != null ? m.chg24 : c.ret24;
+}
+
+function tfBlock(c) {
+  const m = c.tf && c.tf[tf];
+  const sp = TFSPAN[tf];
+  if (!m) return '<div class="blk"><div class="blab">'+TFLABEL[tf]+' view</div>'+
+    '<div class="empty" style="padding:4px 0">not enough '+TFLABEL[tf]+' bars yet</div></div>';
+  const cell = (k,v,cl) => '<div class="met"><div class="k">'+k+'</div><div class="v '+(cl||'')+'">'+v+'</div></div>';
+  const chart = sparkFor(c);
+  return '<div class="blk"><div class="blab">'+TFLABEL[tf]+' view \u00b7 '+m.bars+' bars \u00b7 '+
+      'chart covers '+TFCOVER[tf]+'</div>'+
+    (chart ? '<div style="margin-bottom:10px">'+sparkline(chart,null,300,54)+'</div>' : '')+
+    '<div class="mets">'+
+      cell(sp.chg1, f1(m.chg1,true), cls(m.chg1))+
+      cell(sp.chg4, f1(m.chg4,true), cls(m.chg4))+
+      cell(sp.chg6, f1(m.chg6,true), cls(m.chg6))+
+      cell(sp.chg24, f1(m.chg24,true), cls(m.chg24))+
+      cell('RSI', m.rsi==null?'\u2014':m.rsi.toFixed(0))+
+      cell('vol surge', m.volSurge==null?'\u2014':m.volSurge.toFixed(1)+'\u00d7')+
+      cell('ATR', m.atrPct==null?'\u2014':m.atrPct.toFixed(2)+'%')+
+      cell('ADX', m.adx==null?'\u2014':m.adx.toFixed(0)+(m.trend?' '+m.trend:''))+
+      cell('off high', f1(m.distFromHigh,true), 'dn')+
+      cell('off low', f1(m.distFromLow,true), 'up')+
+      cell('OI '+sp.chg1, f1(m.oiChg1,true), cls(m.oiChg1))+
+      cell('OI '+sp.chg6, f1(m.oiChg6,true), cls(m.oiChg6))+
+      cell('OI '+sp.chg24, oi24Fmt(m.oiChg24), cls(m.oiChg24))+
+      cell('OI value', oiValFmt(m.oiUsd, m.oiChg6), cls(m.oiChg6))+
+      cell('taker', takerFmt(m.lsrTaker), takerCls(m.lsrTaker))+
+    '</div>'+
+    (c.oiSparks && c.oiSparks[tf] && c.oiSparks[tf].length>2
+      ? '<div class="blab" style="margin-top:12px">Open interest \u00b7 '+TFLABEL[tf]+' bars</div>'+
+        sparkline(c.oiSparks[tf],'var(--acc)',300,44)
+      : '')+
+    '</div>';
+}
+
+// Position-size ceiling and this coin's own track record. Both are arithmetic or
+// counted fact - no prediction - which is why they earn space when the two ideas
+// I tested (stop-in-ATRs, signal crowding) did not survive measurement.
+function context(c) {
+  const oi = c.oiUsd || 0, gv = c.gateVol || 0;
+  // 1% of open interest is a rough ceiling before your own order is the market.
+  const cap = oi > 0 ? Math.round(oi * 0.01) : null;
+  const thin = gv > 0 && gv < 2e6;
+  const r = c.record;
+  return '<div class="blk"><div class="blab">Sizing and track record</div>'+
+    '<div class="lv">'+
+      '<div class="lvbox"><div class="lvk">open interest</div><div class="lvv">'+usd(oi)+'</div>'+
+        '<div class="lvsub">gate book</div></div>'+
+      '<div class="lvbox"><div class="lvk">1% of OI</div><div class="lvv'+(thin?' s':'')+'">'+
+        (cap==null?'\u2014':'$'+cap.toLocaleString())+'</div>'+
+        '<div class="lvsub">rough size ceiling</div></div>'+
+      '<div class="lvbox"><div class="lvk">24h volume</div><div class="lvv'+(thin?' s':'')+'">'+usd(gv)+'</div>'+
+        '<div class="lvsub">'+(c.rankVenue==='binance'?'ranked via binance':'gate')+'</div></div>'+
+    '</div>'+
+    (thin ? '<div class="caveat"><b>Thin Gate book.</b> Under $2M daily volume \u2014 '+
+      'the signal is graded on Gate data but you may not be able to size into it, '+
+      'and slippage will exceed anything the backtest assumed.</div>' : '')+
+    (r ? '<div class="rec">Fired <b>'+r.n+'\u00d7</b> since tracking began \u00b7 '+
+      '<b>'+r.target+'</b> hit target, <b>'+r.stop+'</b> stopped, <b>'+r.expired+'</b> timed out \u00b7 '+
+      'reached \u221210% in <b>'+r.hit10Pct+'%</b> \u00b7 avg '+
+      (r.avgPnlPct>=0?'+':'')+r.avgPnlPct+'%</div>'
+      : '<div class="rec mut">No closed signals recorded for this coin yet \u2014 '+
+        'the live tracker starts empty and fills as signals resolve.</div>')+
+  '</div>';
+}
+
+function card(c) {
+  const met = (k,v,cl) => '<div class="met"><div class="k">'+k+'</div><div class="v '+(cl||'')+'">'+v+'</div></div>';
+  const isOpen = open.has(c.symbol);
+  return '<div class="card '+c.tier+(isOpen?' open':'')+'" data-sym="'+esc(c.symbol)+'">'+
+    '<button class="chead" aria-expanded="'+isOpen+'">'+
+      '<div class="tickwrap">'+
+        '<div class="tick">'+esc(c.base)+'</div>'+
+        (function(){ const ch = ctrlChip(c)+since(c)+wasBadge(c);
+          return ch ? '<div class="chips">'+ch+'</div>' : ''; })()+
+        '<div class="px">'+(c.price!=null?c.price:'')+'</div></div>'+
+      sparkline(sparkFor(c), null, 64, 26)+
+      '<div class="scorewrap"><div class="score" style="color:var('+VAR[c.tier]+')">'+c.dumpScore+'</div>'+
+        '<div class="scorelab">score</div></div>'+
+      '<span class="chev">▼</span>'+
+    '</button>'+
+    '<div class="quick">'+
+      '<span>'+TFSPAN[tf].chg24+' <b class="'+cls(qchg(c))+'">'+f1(qchg(c),true)+'</b></span>'+
+      '<span>OI '+TFSPAN[tf].chg24+' <b class="'+cls(q(c,'oiChg24'))+'">'+oi24Fmt(q(c,'oiChg24'))+'</b></span>'+
+      '<span>OI <b class="'+cls(q(c,'oiChg6'))+'">'+oiValFmt(q(c,'oiUsd'),q(c,'oiChg6'))+'</b></span>'+
+      '<span>taker <b class="'+takerCls(q(c,'lsrTaker'))+'">'+takerFmt(q(c,'lsrTaker'))+'</b></span>'+
+      '<span>off high <b class="dn">'+f1(q(c,'distFromHigh'),true)+'</b></span>'+
+    '</div>'+
+    '<div class="cbody">'+
+      tfBlock(c)+
+      ctrlDetail(c)+
+      '<div class="mets">'+
+        met('OI 6h', f1(c.oiChg6,true), cls(c.oiChg6))+
+        met('OI value', oiValFmt(c.oiUsd, c.oiChg6), cls(c.oiChg6))+
+        met('taker', takerFmt(c.lsrTaker), takerCls(c.lsrTaker))+
+        met('RSI', c.rsi14==null?'—':c.rsi14.toFixed(0))+
+        met('vol surge', c.volSurge==null?'—':c.volSurge.toFixed(1)+'×')+
+        met('ATR', c.atrPct==null?'—':c.atrPct.toFixed(2)+'%')+
+        met('ADX', c.adx==null?'—':c.adx.toFixed(0)+(c.trend?' '+c.trend:''))+
+        met('stop', c.suggestedStopPct==null?'—':c.suggestedStopPct+'%', 'mut')+
+        met('funding', c.fundingPct==null?'—':c.fundingPct.toFixed(3)+'%', 'mut')+
+        met('7d high', c.high7d==null?'—':String(+c.high7d.toPrecision(6)), 'mut')+
+      '</div>'+
+      (c.oiSpark && c.oiSpark.length>2 ?
+        '<div class="blk"><div class="blab">Open interest · last 48h</div>'+
+        sparkline(c.oiSpark,'var(--acc)',300,40)+'</div>' : '')+
+      levels(c)+
+      context(c)+
+      timeline(c)+
+      evidence(c)+
+      gaps(c)+
+    '</div>'+
+  '</div>';
+}
+
+// A coin that HELD a high tier and has since dropped. Kept visible for 48h - the
+// same window the outcome tracker uses, so this list and the resolved log always
+// describe the same signals. Styled quieter than a live tier on purpose: a
+// decayed PRIME still reaches -10% about 41% of the time, but entering after
+// decay measured 60% -> 41% with roughly half the move gone, so this informs
+// without looking like a fresh entry.
+const CTRLLABEL = {
+  LONGS_BUILDING:'LONGS', SHORTS_BUILDING:'SHORTS',
+  LONGS_CAPITULATING:'LONGS EXITING', SHORT_SQUEEZE:'SQUEEZE', QUIET:'FLAT'
+};
+// Who is in control on the SELECTED timeframe. Descriptive - it is not scored and
+// does not move the tier.
+function ctrlChip(c) {
+  const m = c.tf && c.tf[tf];
+  const k = m && m.control;
+  if (!k) return '';
+  return '<span class="ctrl '+k.state+'" title="'+esc(k.why)+'">'+
+    '<span class="dotc"></span>'+CTRLLABEL[k.state]+'</span>';
+}
+
+function ctrlDetail(c) {
+  const m = c.tf && c.tf[tf];
+  const k = m && m.control;
+  if (!k) return '';
+  const num = (lab, v, extra) => v == null ? '' :
+    '<div class="met"><div class="k">'+lab+'</div><div class="v">'+v+
+    (extra?'<span class="mut" style="font-size:9px"> '+extra+'</span>':'')+'</div></div>';
+  return '<div class="blk"><div class="blab">Who is in control \u00b7 '+TFLABEL[tf]+'</div>'+
+    '<div class="mets">'+
+      num('taker', takerFmt(m.lsrTaker))+
+    '</div>'+
+    '<div class="ctrlwhy"><b>'+CTRLLABEL[k.state]+'</b> \u2014 '+esc(k.why)+
+      (k.lift?' <span class="mut">('+k.lift+' train/test)</span>':'')+
+      (k.caution?'<br><span class="cau">\u26a0 '+esc(k.caution)+
+        ' \u2014 treat as a reason NOT to short, not a confirmation.</span>':'')+
+      '<br><span class="mut">Descriptive only \u2014 not scored, does not move the tier. '+
+      'Taker is shown but never sets the verdict: its extremes measured anti-predictive.</span>'+
+    '</div></div>';
+}
+
+// Visible even when sorting by something other than severity.
+function wasBadge(c) {
+  const w = c.wasHigh;
+  if (!w || !w.decayed) return '';
+  return '<span class="badge">was <span class="bt '+w.tier+'">'+w.tier+'</span> '+dur(w.agoSec)+' ago</span>';
+}
+
+function pastRow(c) {
+  const w = c.wasHigh;
+  const chg = w.changeSincePct;
+  // For a short, price falling is the good outcome - so negative is green here.
+  const k = chg == null ? 'mut' : chg <= -1 ? 'up' : chg >= 1 ? 'dn' : 'mut';
+  const prog = w.bestPct != null ? Math.max(0, Math.min(100, (w.bestPct / 15) * 100)) : 0;
+  return '<div class="past">'+
+    '<div class="pasttop">'+
+      '<div><div class="pastsym">'+esc(c.base)+'</div>'+
+        '<div class="pastwas">was <span class="wt '+w.tier+'">'+w.tier+'</span> '+
+        dur(w.agoSec)+' ago \u00b7 now '+c.tier+'</div></div>'+
+      '<div class="pastnum"><div class="big '+k+'">'+(chg==null?'\u2014':(chg>=0?'+':'')+chg.toFixed(1)+'%')+'</div>'+
+        '<div class="sub">since it fired</div></div>'+
+    '</div>'+
+    '<div class="pastbar"><span style="width:'+prog.toFixed(0)+'%"></span></div>'+
+    '<div class="pastfoot"><span>best '+bestFmt(w.bestPct)+
+      ' \u00b7 worst +'+(w.worstPct==null?'\u2014':w.worstPct.toFixed(1)+'%')+'</span>'+
+      '<span>'+prog.toFixed(0)+'% of a 15% target</span></div>'+
+  '</div>';
+}
+
+function logRow(r) {
+  const p = r.pnlPct;
+  return '<div class="logrow">'+
+    '<span class="nm">'+esc(r.base)+'</span>'+
+    '<span class="st '+r.status+'">'+r.status+'</span>'+
+    '<span class="'+(p>0?'up':p<0?'dn':'mut')+'" style="text-align:right">'+
+      (p>=0?'+':'')+(p==null?'\u2014':p.toFixed(1))+'%</span>'+
+    '<span class="mut" style="text-align:right">'+
+      (r.maxFavPct==null?'\u2014':'best '+(r.maxFavPct>0?'-'+r.maxFavPct.toFixed(1):'+'+Math.abs(r.maxFavPct).toFixed(1))+'%')+'</span>'+
+    '<span class="mut" style="text-align:right">'+
+      (r.hoursHeld==null?'\u2014':r.hoursHeld.toFixed(0)+'h')+'</span>'+
+  '</div>';
+}
+
+function render() {
+  if (!DATA) return;
+  const all = DATA.candidates || [];
+  $('uniN').textContent = all.length;
+  const counts = {}; TIERS.forEach(t => counts[t] = all.filter(c => c.tier===t).length);
+
+  $('rampbar').innerHTML = TIERS.filter(t=>counts[t]).map(t =>
+    '<button data-t="'+t+'" aria-pressed="'+(!hidden.has(t))+'" title="'+t+' — click to filter" '+
+    'style="flex:'+counts[t]+';background:var('+VAR[t]+')">'+counts[t]+'</button>').join('');
+  $('rampkey').innerHTML = TIERS.map(t =>
+    '<span><span class="sw" style="background:var('+VAR[t]+')"></span>'+t+' '+counts[t]+'</span>').join('');
+
+  let list = all.filter(c => !hidden.has(c.tier));
+  if (query) list = list.filter(c => c.base.toLowerCase().indexOf(query) >= 0);
+
+  const rank = {PRIME:4,IMMINENT:3,DANGER:2,WARNING:1,QUIET:0};
+  const n = v => v == null ? -Infinity : v;
+  if (sortBy === 'tier') list.sort((a,b) => (rank[b.tier]-rank[a.tier]) || (b.dumpScore-a.dumpScore));
+  // Newest first, but a QUIET coin has no live signal to be "new", so those sink.
+  if (sortBy === 'new')  list.sort((a,b) =>
+    (a.tier==='QUIET') - (b.tier==='QUIET') || a.tierAgeSec - b.tierAgeSec);
+  if (sortBy === 'oi')   list.sort((a,b) => n(b.oiChg24)-n(a.oiChg24));
+  if (sortBy === 'move') list.sort((a,b) => n(b.ret24)-n(a.ret24));
+  if (sortBy === 'liq')  list.sort((a,b) => n(b.liqPctOfOi)-n(a.liqPctOfOi));
+
+  let html = '';
+  if (sortBy === 'tier') {
+    TIERS.forEach(t => {
+      const g = list.filter(c => c.tier === t);
+      if (!g.length) return;
+      html += '<div class="ghead"><h2 style="color:var('+VAR[t]+')">'+t+'</h2>'+
+        '<span class="c">'+g.length+'</span><span class="d">'+DESC[t]+'</span></div>'+
+        g.map(card).join('');
+    });
+  } else {
+    html = list.map(card).join('');
+  }
+  $('list').innerHTML = html || '<div class="empty">nothing matches that filter</div>';
+
+  // decayed only - a coin still holding its high tier belongs in the live list
+  const past = all.filter(c => c.wasHigh && c.wasHigh.decayed)
+    .sort((a,b) => a.wasHigh.agoSec - b.wasHigh.agoSec);
+  $('pastSec').style.display = past.length ? '' : 'none';
+  $('pastCnt').textContent = past.length + ' in the last 48h';
+  $('pastList').innerHTML = past.map(pastRow).join('');
+
+  const log = DATA.recentOutcomes || [];
+  $('logSec').style.display = log.length ? '' : 'none';
+  $('logCnt').textContent = log.length;
+  $('logList').innerHTML = log.length ? log.map(logRow).join('')
+    : '<div class="empty">no signals have resolved yet</div>';
+}
+
+function chrome() {
+  const d = DATA; if (!d) return;
+  const age = Math.round((Date.now() - d.generatedAt)/1000);
+  $('stamp').textContent = new Date(d.generatedAt).toLocaleTimeString();
+  // Price and features move at different speeds; saying so stops every field
+  // looking as live as the price ticker.
+  let refreshTxt = '';
+  if (d.nextRefreshAt) {
+    const left = Math.max(0, Math.round((d.nextRefreshAt - Date.now())/1000));
+    const total = (d.config && d.config.refreshMin || 5) * 60;
+    const pct = Math.max(0, Math.min(100, Math.round((1 - left/total) * 100)));
+    refreshTxt = ' · <span class="next"><span class="ring" style="--p:'+pct+'%"></span>' +
+      'OI/liq data in ' + dur(left) + '</span>';
+  }
+  $('meta').innerHTML = 'price ' + (age < 90 ? age+'s' : Math.round(age/60)+'m') + ' old' +
+    refreshTxt + (d.pollErrors24h ? ' · '+d.pollErrors24h+' errors 24h' : '');
+  let b = '';
+  if (d.universeFiltered === false) b += '<div class="banner">Binance perp list unavailable — the ' +
+    'universe is unfiltered and may include Gate\'s tokenized stocks and commodities (XAU, SNDK, CL). ' +
+    'Treat these rankings with caution.</div>';
+  $('banner').innerHTML = b;
+}
+
+async function load() {
+  try {
+    // Ask only for the timeframe on screen - the other four are ~180KB gzipped
+    // of data the page will not draw.
+    const r = await fetch('/api/scan?tf=' + encodeURIComponent(tf), {cache:'no-store'});
+    DATA = await r.json();
+    $('pulse').classList.remove('off');
+  } catch (_) { $('pulse').classList.add('off'); return; }
+  chrome(); render();
+}
+
+document.addEventListener('click', e => {
+  const seg = e.target.closest('#sortSeg button');
+  if (seg) {
+    sortBy = seg.dataset.s;
+    [].forEach.call($('sortSeg').children, b => b.setAttribute('aria-pressed', b===seg));
+    render(); return;
+  }
+  const tfb = e.target.closest('#tfSeg button');
+  if (tfb) {
+    tf = tfb.dataset.tf;
+    [].forEach.call($('tfSeg').children, b => b.setAttribute('aria-pressed', b===tfb));
+    // The payload is scoped to one timeframe, so switching needs a refetch, not
+    // just a re-render. Draw immediately from what we have, then refresh.
+    chrome(); render(); load(); return;
+  }
+  const rb = e.target.closest('#rampbar button');
+  if (rb) { const t = rb.dataset.t; hidden.has(t) ? hidden.delete(t) : hidden.add(t); render(); return; }
+  const head = e.target.closest('.chead');
+  if (head) {
+    const c = head.closest('.card'), sym = c.dataset.sym;
+    open.has(sym) ? open.delete(sym) : open.add(sym);
+    c.classList.toggle('open');
+    head.setAttribute('aria-expanded', open.has(sym));
+  }
+});
+$('q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
+
+load();
+// 30s, matching the scanner's own Gate poll. Refetching every 15s returned
+// byte-identical data half the time, and with five timeframes the payload is
+// ~185KB gzipped - that was 44MB/hour on a phone to learn nothing.
+setInterval(load, 30000);
+// The countdown and the signal ages have to move between fetches, or they sit
+// frozen for 15s and then jump. Cheap: no network, no re-render of the list.
+setInterval(() => {
+  if (!DATA) return;
+  chrome();
+  document.querySelectorAll('.card').forEach(el => {
+    const c = (DATA.candidates || []).find(x => x.symbol === el.dataset.sym);
+    if (!c || c.tier === 'QUIET') return;
+    const b = el.querySelector('.agechip b');
+    if (b) b.textContent = dur(c.tierAgeSec + Math.round((Date.now() - DATA.generatedAt)/1000));
+  });
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
