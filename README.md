@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📉 Parabolic Scanner — Binance Fork
+# 📉 Parabolic Scanner — Binance 
 
 **Watches the top 60 USDT perpetuals on Binance by 24h volume and flags the ones most likely to fall hard in the next 12 hours.**
 
