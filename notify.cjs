@@ -378,4 +378,108 @@ async function notifyEntries(state, candidates, logEvent) {
   return sent;
 }
 
-module.exports = { notifyEntries, config, bodyFor, postAlert, line, render, richText, DEFAULT_TEMPLATE, CFG_FILE };
+/* ------------------------------------------------------------------ *
+ * Invalidation alerts
+ *
+ * The entry alert says a signal fired. Nothing said when one stopped being
+ * worth holding - so a coin that fired and then kept climbing sat "open" and
+ * silent all the way into its stop.
+ *
+ * Thresholds measured on the GATE cache (46 PRIME episodes) and applied here
+ * unchanged - Binance has not been re-measured, so treat them as borrowed.
+ * Measured over 46 PRIME episodes: once price has gone X% against the short,
+ * the chance it still reaches the -15% target is 55% at entry, 35% by +5%, and
+ * 9% by +12% - where 20 of 22 went on to stop out. So +5% is a warning and +12%
+ * is the point to get out, three whole points before the stop fires.
+ *
+ * Plain text, no chart. The entry alert is the one worth a picture; these need
+ * to be readable in two seconds on a phone.
+ * ------------------------------------------------------------------ */
+
+const STAGE_ALERT = {
+  weakening: {
+    emoji: '🟡', title: 'WEAKENING', colour: 0xf4b333,
+    line: 'Moved against us. Odds of reaching target drop from 55% to about 35% from here.'
+  },
+  cancel: {
+    emoji: '🔴', title: 'CANCEL', colour: 0xff2f45,
+    line: 'This one is done. Only ~9% recover from here - 20 of 22 measured episodes went on to hit the stop. Close it now rather than riding the last 3% into the stop.'
+  }
+};
+
+const CLOSE_ALERT = {
+  target:  { emoji: '🟢', title: 'TARGET HIT',  colour: 0x3ecf8e },
+  stop:    { emoji: '⚫', title: 'STOPPED OUT', colour: 0x7b8a9f },
+  expired: { emoji: '⚪', title: 'EXPIRED 48h', colour: 0x5f7089 }
+};
+
+function stageBody(rec, kind, cfg) {
+  const a = kind === 'stage' ? STAGE_ALERT[rec.stage] : CLOSE_ALERT[rec.status];
+  if (!a) return null;
+  const adv = kind === 'stage' ? rec.stageAdvPct : rec.maxAdvPct;
+  const hrs = ((Date.now() - rec.openedAt) / 3600000).toFixed(1);
+  const fields = [
+    { name: 'Entry', value: String(rec.entry), inline: true },
+    { name: 'Against us', value: `+${Number(adv).toFixed(1)}%`, inline: true },
+    { name: 'Age', value: `${hrs}h`, inline: true }
+  ];
+  if (kind === 'close') {
+    fields.push({ name: 'P&L', value: `${rec.pnlPct > 0 ? '+' : ''}${rec.pnlPct}%`, inline: true });
+    fields.push({ name: 'Best it got', value: `-${rec.maxFavPct}%`, inline: true });
+  } else {
+    fields.push({ name: 'Stop at', value: `+${rec.stopPct}%`, inline: true });
+  }
+  return {
+    username: cfg.username || 'Dump Watch',
+    embeds: [{
+      title: `${a.emoji}  ${a.title} — ${rec.base || rec.symbol}`,
+      description: kind === 'stage' ? a.line : `Opened as ${rec.tier}.`,
+      color: a.colour,
+      fields,
+      footer: { text: `${rec.tier} signal · opened ${new Date(rec.openedAt).toISOString().slice(5, 16).replace('T', ' ')}Z` }
+    }],
+    // Never pings. A cancel matters, but not enough to wake anyone at 3am - and
+    // an alert muted for pinging too often stops working entirely.
+    allowed_mentions: { parse: [] }
+  };
+}
+
+// Fire-and-forget, like the entry path: a scan must never wait on Discord.
+async function notifyStages(state, staged, closed, logEvent) {
+  const cfg = config();
+  if (!cfg.enabled || !cfg.urls.length) return 0;
+  if (!state.stageNotified) state.stageNotified = [];
+  const seen = state.stageNotified;
+  let sent = 0;
+
+  const push = (rec, kind) => {
+    // Keyed on record id AND stage, so each stage of each signal alerts exactly
+    // once - a coin sitting at +13% for six hours must not buzz every poll.
+    const key = `${rec.id}-${kind === 'stage' ? rec.stage : rec.status}`;
+    if (seen.includes(key)) return;
+    const body = stageBody(rec, kind, cfg);
+    if (!body) return;
+    seen.push(key);
+    sent++;
+    for (const url of cfg.urls) {
+      fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body), signal: AbortSignal.timeout(10000)
+      }).then(r => {
+        if (r && !r.ok && logEvent) logEvent({ type: 'stage_webhook_failed', symbol: rec.symbol, status: r.status });
+      }).catch(e => {
+        if (logEvent) logEvent({ type: 'stage_webhook_failed', symbol: rec.symbol, error: String(e.message || e) });
+      });
+    }
+    if (logEvent) logEvent({ type: 'stage_alert', symbol: rec.symbol, stage: kind === 'stage' ? rec.stage : rec.status });
+  };
+
+  for (const rec of staged || []) push(rec, 'stage');
+  for (const rec of closed || []) push(rec, 'close');
+
+  if (seen.length > 800) state.stageNotified = seen.slice(-800);
+  return sent;
+}
+
+module.exports = { notifyEntries, notifyStages, config, bodyFor, postAlert, line, render, richText, DEFAULT_TEMPLATE, CFG_FILE, STAGE_ALERT, CLOSE_ALERT };
+

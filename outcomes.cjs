@@ -37,8 +37,38 @@ const CFG = {
   // Caveat kept next to the number: ~20 configs tested on 30 episodes, and $0.30
   // a trade is inside the noise for that sample.
   stopPct: 15,
-  maxHours: 48
+  maxHours: 48,
+
+  // Invalidation ladder. Measured over 46 PRIME episodes on the Gate cache, first
+  // touch, a bar spanning both levels counted as the stop. Once price has gone X%
+  // AGAINST the short, the chance it still reaches the -15% target:
+  //
+  //     adverse   episodes   still reach target
+  //       +0         46           55%
+  //       +3         37           43%
+  //       +5         33           35%
+  //      +10         30           31%
+  //      +12         22            9%   <- 20 of 22 went on to stop out
+  //
+  // The odds sit flat between +5 and +10, then fall off a cliff at +12. So two
+  // stages and no more: one that says the edge has halved, one that says it is
+  // gone with three points still left before the stop fires.
+  //
+  // Caveat kept next to the number: the +12 figure rests on 22 episodes with 2
+  // recoveries. The true rate is somewhere under 28%, not exactly 9%. Treat +12
+  // as roughly where a signal dies, not as a precise level.
+  weakenPct: 5,
+  cancelPct: 12
 };
+
+// Stage of an open record, from how far price has moved against it. Ordered, so
+// a record can only ever move forward through them.
+const STAGES = ['open', 'weakening', 'cancel'];
+function stageFor(advPct) {
+  if (advPct >= CFG.cancelPct) return 'cancel';
+  if (advPct >= CFG.weakenPct) return 'weakening';
+  return 'open';
+}
 
 function ensure(state) {
   if (!state.outcomes) state.outcomes = {};
@@ -149,12 +179,25 @@ function adopt(state, tracked, now, snapshotFor) {
 function onPrice(state, priceOf, now, appendFile) {
   const open = ensure(state);
   const closed = [];
+  const staged = [];
   for (const [symbol, rec] of Object.entries(open)) {
     const price = priceOf[symbol];
     if (!price) continue;
     rec.samples++;
     if (price < rec.lowest) { rec.lowest = price; rec.lowestAt = now; }
     if (price > rec.highest) { rec.highest = price; rec.highestAt = now; }
+
+    // Stage is driven by the running HIGH, not the current price. A signal that
+    // spiked to +13% and eased back to +8% has already been through the cliff -
+    // letting it fall back to "weakening" would re-alert on the way up again.
+    const advPct = ((rec.highest - rec.entry) / rec.entry) * 100;
+    const next = stageFor(advPct);
+    if (STAGES.indexOf(next) > STAGES.indexOf(rec.stage || 'open')) {
+      rec.stage = next;
+      rec.stageAt = now;
+      rec.stageAdvPct = +advPct.toFixed(2);
+      staged.push(rec);
+    }
 
     const hours = (now - rec.openedAt) / 3600000;
     // Stop is checked FIRST. Between two polls the order of touches is unknowable,
@@ -181,8 +224,15 @@ function onPrice(state, priceOf, now, appendFile) {
     delete open[symbol];
     markDone(state, rec.id);
     closed.push(rec);
+    // A record that closes on this same poll is reported as closed, not as a
+    // stage change - one event, one alert.
+    const i = staged.indexOf(rec);
+    if (i >= 0) staged.splice(i, 1);
     try { appendFile(JSON.stringify(rec) + '\n'); } catch (_) {}
   }
+  // Kept as a property so existing callers that treat the return as an array of
+  // closed records keep working unchanged.
+  closed.staged = staged;
   return closed;
 }
 
@@ -226,4 +276,4 @@ function summarise(recs) {
   return { overall: stat(done), perTier, perCoin, perRule, closed: done.length };
 }
 
-module.exports = { CFG, TRACK_TIERS, onTier, adopt, onPrice, history, summarise, ensure, markDone };
+module.exports = { CFG, TRACK_TIERS, STAGES, stageFor, onTier, adopt, onPrice, history, summarise, ensure, markDone };

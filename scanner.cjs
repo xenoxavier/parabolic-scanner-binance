@@ -487,6 +487,18 @@ async function poll() {
     console.log(`  [outcome] ${r.base} ${r.tier} -> ${r.status}  ` +
       `P&L ${r.pnlPct > 0 ? '+' : ''}${r.pnlPct}%  best ${r.maxFavPct}%  ${r.hoursHeld}h`);
   }
+  // A signal that fired and then kept climbing used to sit open and silent all
+  // the way into its stop. onPrice now reports the crossings; alert on each once.
+  for (const r of closed.staged || []) {
+    console.log(`  [stage] ${r.base} -> ${r.stage.toUpperCase()}  ` +
+      `+${r.stageAdvPct}% against us, stop at +${r.stopPct}%`);
+  }
+  try {
+    const n = await NOTIFY.notifyStages(state, closed.staged, closed, logEvent);
+    if (n) console.log(`  [notify] ${n} invalidation alert${n > 1 ? 's' : ''} sent`);
+  } catch (e) {
+    logEvent({ type: 'stage_notify_failed', error: String(e.message || e) });
+  }
 
   const RANK = { PRIME: 4, IMMINENT: 3, DANGER: 2, WARNING: 1, QUIET: 0 };
   out.sort((a, b) => (RANK[b.tier] - RANK[a.tier]) || (b.dumpScore - a.dumpScore));
