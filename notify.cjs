@@ -453,6 +453,13 @@ async function notifyStages(state, staged, closed, logEvent) {
   let sent = 0;
 
   const push = (rec, kind) => {
+    // Same tier gate as the entry alert. Records are opened for PRIME AND
+    // IMMINENT so the stats keep a full sample, but only the tiers configured
+    // for alerts are worth interrupting anyone about - otherwise a DANGER coin
+    // nobody was ever told about sends a CANCEL for a trade that was never
+    // taken. The tier is the one the record OPENED at, so a signal notified as
+    // PRIME is followed through to its close even if it decays on the way.
+    if (!cfg.tiers.includes(rec.tier)) return;
     // Keyed on record id AND stage, so each stage of each signal alerts exactly
     // once - a coin sitting at +13% for six hours must not buzz every poll.
     const key = `${rec.id}-${kind === 'stage' ? rec.stage : rec.status}`;
