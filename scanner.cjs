@@ -206,23 +206,38 @@ async function refresh(tickerRows) {
   let ok = 0;
   for (const contract of universeList) {
     try {
-      // Only 1h, native. Gate's version also carries 1m/5m/15m context views,
-      // but those were explicitly "display only, never scored" there too -
-      // dropped here to keep each symbol at 2 external calls (klines + stats,
-      // stats itself fans out to OI/taker/funding inside binance.cjs) instead
-      // of 8, which matters more on Binance's tighter weight budget than it
-      // did against Gate's.
-      const [bars, stats] = await Promise.all([
-        BINANCE.klines(contract), BINANCE.stats(contract)
+      // 1h and 4h, both native. Gate's version also carries 1m/5m/15m context
+      // views; those stay off here because of the RATE BUDGET, not taste.
+      // /futures/data/* is a separate ~1000-request/5min limiter with no weight
+      // header to watch, and the whale board on :8809 already spends ~478 of it
+      // per 5 minutes (measured: 95632 calls over 59969s). At 60 symbols and 2
+      // calls per interval, adding 4h takes the shared total to ~72%; adding 5m
+      // and 15m as well would reach ~96% and start returning 429s to the whale
+      // board. 4h earns its cost by fixing a real mislabel; the sub-hourly
+      // views would not.
+      //
+      // 4h OI and taker MUST be fetched at period=4h. This used to hand the
+      // HOURLY `stats` to the h4 view, so every h4 open-interest and taker
+      // number was the hourly one wearing a 4h label - verified identical on
+      // 8 of 8 coins while the h4 price legitimately differed.
+      const [bars, stats, st4h] = await Promise.all([
+        BINANCE.klines(contract), BINANCE.stats(contract),
+        BINANCE.stats(contract, 48, '4h')
       ]);
       if (!bars.length) continue;
       const f = SCORE.features(bars, stats);
-      // 4h is derived from the 1h series rather than fetched - free, and it
-      // can never disagree with the 1h data the tiers are computed from.
+      // The 4h PRICE series is aggregated from the 1h bars rather than fetched -
+      // free, and it can never disagree with the 1h data the tiers come from.
       // No 1d view: 220 hourly bars only make 9 daily ones, too few for RSI
       // or ADX, and a daily read sits outside the 12h horizon the rules were
       // measured on.
       const bars4h = SCORE.aggregate(bars, 4);
+      // This repo's statMetrics() takes no interval - it has no liquidation
+      // fields, which is the only thing Gate's uses the interval for - so the
+      // series is simply passed at the granularity it was fetched.
+      // NOTE the offsets inside it (oiChg1/6/24) are BAR counts, not hours. On
+      // h1 those coincide with hours; on h4, oiChg24 spans 96 hours. The page
+      // labels the real span rather than reprinting the field name.
       const withStats = (price, st) => {
         if (!price) return null;
         const m = Object.assign({}, price, SCORE.statMetrics(st));
@@ -233,10 +248,10 @@ async function refresh(tickerRows) {
       // fast views) - the tiers always read the 1h `f` above, never this.
       const tf = {
         h1: withStats(SCORE.tfMetrics(bars), stats),
-        h4: withStats(SCORE.tfMetrics(bars4h), stats)
+        h4: withStats(SCORE.tfMetrics(bars4h), st4h)
       };
       const oiOf = a => (a || []).slice(-40).map(r => Math.round(r.oiUsd)).filter(Number.isFinite);
-      const oiSparks = { h1: oiOf(stats), h4: oiOf(stats) };
+      const oiSparks = { h1: oiOf(stats), h4: oiOf(st4h) };
       // Sparkline points: the chart renders 64px wide, so more than ~48
       // points are bytes that cannot become pixels. 6 significant digits
       // for the same reason.
